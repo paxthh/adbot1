@@ -1,7 +1,6 @@
 """
 AdForwarder Bot - Main Entry Point
 """
-import asyncio
 import logging
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -16,9 +15,7 @@ from handlers import (
     logout_user, stats_cmd,
     button_handler
 )
-from conversation_states import (
-    PHONE, CODE, PASSWORD
-)
+from conversation_states import PHONE, CODE, PASSWORD
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -31,18 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def owner_only(func):
-    """Decorator – only owner can use this handler."""
-    async def wrapper(update, context):
-        if update.effective_user.id != OWNER_ID:
-            await update.message.reply_text("⛔ Unauthorised.")
-            return
-        return await func(update, context)
-    wrapper.__name__ = func.__name__
-    return wrapper
-
-
-async def main():
+def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     # ── Login conversation ──────────────────────────────────────────────
@@ -59,9 +45,9 @@ async def main():
     app.add_handler(login_conv)
 
     # ── Regular commands ────────────────────────────────────────────────
-    app.add_handler(CommandHandler("start",   start))
-    app.add_handler(CommandHandler("help",    help_cmd))
-    app.add_handler(CommandHandler("setpost", set_post))
+    app.add_handler(CommandHandler("start",    start))
+    app.add_handler(CommandHandler("help",     help_cmd))
+    app.add_handler(CommandHandler("setpost",  set_post))
     app.add_handler(CommandHandler("startads", start_ads))
     app.add_handler(CommandHandler("stopads",  stop_ads))
     app.add_handler(CommandHandler("status",   status))
@@ -76,8 +62,9 @@ async def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     logger.info("Bot starting …")
-    await app.run_polling(drop_pending_updates=True)
+    # run_polling() manages its own event loop — do NOT wrap in asyncio.run()
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
