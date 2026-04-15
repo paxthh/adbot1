@@ -1,6 +1,6 @@
 """
 Background ad-forwarding worker.
-Runs as a long-lived asyncio task.
+Runs as a long-lived asyncio task inside PTB's event loop.
 """
 import asyncio
 import logging
@@ -11,14 +11,13 @@ import userbot
 logger = logging.getLogger(__name__)
 
 _task: asyncio.Task | None = None
-_stop_event = asyncio.Event()
+_stop_event: asyncio.Event | None = None
 
-# Runtime counters
 _counters = {
-    "rounds_done":   0,
-    "total_sent":    0,
-    "total_failed":  0,
-    "started_at":    0,
+    "rounds_done":  0,
+    "total_sent":   0,
+    "total_failed": 0,
+    "started_at":   0,
 }
 
 
@@ -32,15 +31,18 @@ def get_counters() -> dict:
 
 async def _worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: int):
     global _counters
-    _counters = {"rounds_done": 0, "total_sent": 0,
-                 "total_failed": 0, "started_at": int(time.time())}
-    _stop_event.clear()
+    _counters = {
+        "rounds_done":  0,
+        "total_sent":   0,
+        "total_failed": 0,
+        "started_at":   int(time.time()),
+    }
 
     try:
         while not _stop_event.is_set():
             groups = db.get_groups(only_enabled=True)
             if not groups:
-                await notify_cb("⚠️ No enabled groups found. Use /groups to manage.")
+                await notify_cb("⚠️ No enabled groups found. Use /groups to manage or /refresh to scan.")
                 break
 
             round_num = _counters["rounds_done"] + 1
@@ -58,13 +60,16 @@ async def _worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: in
                     failed += 1
                     _counters["total_failed"] += 1
 
-                # Inter-group delay to avoid flood
-                await asyncio.sleep(delay)
+                # inter-group delay
+                try:
+                    await asyncio.wait_for(_stop_event.wait(), timeout=delay)
+                    break  # stop event fired during sleep
+                except asyncio.TimeoutError:
+                    pass   # normal — keep going
 
             _counters["rounds_done"] += 1
             await notify_cb(
-                f"✅ Round {round_num} done — "
-                f"Sent: {sent} | Failed: {failed}"
+                f"✅ Round {round_num} done — Sent: {sent} | Failed: {failed}"
             )
 
             if max_rounds and _counters["rounds_done"] >= max_rounds:
@@ -72,11 +77,15 @@ async def _worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: in
                 break
 
             if not _stop_event.is_set():
-                await notify_cb(f"⏳ Next round in {delay}s …")
-                await asyncio.sleep(delay)
+                await notify_cb(f"⏳ Next round starting in {delay}s …")
+                try:
+                    await asyncio.wait_for(_stop_event.wait(), timeout=delay)
+                    break  # stop event fired during inter-round wait
+                except asyncio.TimeoutError:
+                    pass
 
     except asyncio.CancelledError:
-        pass
+        logger.info("Worker cancelled.")
     except Exception as e:
         logger.exception("Worker crashed: %s", e)
         await notify_cb(f"❌ Worker crashed: {e}")
@@ -84,24 +93,25 @@ async def _worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: in
         await notify_cb("🛑 Ad worker stopped.")
 
 
-async def start_worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: int):
-    global _task
+async def start_worker(notify_cb, src_entity, msg_id: int, delay: int, max_rounds: int) -> bool:
+    global _task, _stop_event
     if is_running():
         return False
-    _stop_event.clear()
-    _task = asyncio.create_task(
+    _stop_event = asyncio.Event()
+    _task = asyncio.get_event_loop().create_task(
         _worker(notify_cb, src_entity, msg_id, delay, max_rounds)
     )
     return True
 
 
 async def stop_worker():
-    global _task
-    _stop_event.set()
+    global _task, _stop_event
+    if _stop_event:
+        _stop_event.set()
     if _task and not _task.done():
         _task.cancel()
         try:
-            await _task
-        except asyncio.CancelledError:
+            await asyncio.shield(_task)
+        except (asyncio.CancelledError, Exception):
             pass
     _task = None
