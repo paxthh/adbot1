@@ -11,7 +11,7 @@ import db
 import userbot
 import worker
 from config import OWNER_ID, DEFAULT_DELAY_SECONDS, DEFAULT_ROUNDS
-from states import PHONE, CODE, PASSWORD
+from conversation_states import PHONE, CODE, PASSWORD
 
 logger = logging.getLogger(__name__)
 
