@@ -3,7 +3,7 @@ Configuration – loaded once at startup.
 """
 API_ID    = 21752358
 API_HASH  = "fb46a136fed4a4de27ab057c7027fec3"
-BOT_TOKEN = "8764978241:AAEbMA_XGrleT20B19z8uGkxbnm6u05IsuI"
+BOT_TOKEN = "8695237062:AAFE_F1BigMHTRk-Wtu4m5KX_eRNmVWhwaM"
 OWNER_ID  = 1899208318
 
 # ── Defaults (can be overridden at runtime via /delay and /rounds) ──────────
