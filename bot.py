@@ -16,7 +16,7 @@ from handlers import (
     logout_user, stats_cmd,
     button_handler
 )
-from states import (
+from conversation_states import (
     PHONE, CODE, PASSWORD
 )
 
